@@ -20,54 +20,60 @@ export class RouteAnalyzer {
   }
 
   analyzeAffectedRoutes(changedFiles: string[]): AffectedRoute[] {
-    const graph = this.graphBuilder.buildGraph(changedFiles);
+    // Check for global files that affect all routes
+    const globalFiles = changedFiles.filter(f => 
+      f.includes('middleware.') || 
+      f === 'next.config.js' || 
+      f === 'next.config.mjs' ||
+      f === 'next.config.ts' ||
+      f.includes('pages/_app.') ||
+      f.includes('pages/_document.')
+    );
+
+    // First collect ALL route files in the project
+    const allRoutes: AffectedRoute[] = [];
+    allRoutes.push(...this.collectAllAppRouterRoutes());
+    allRoutes.push(...this.collectAllPagesRouterRoutes());
+
+    // If global files changed, all routes are affected
+    if (globalFiles.length > 0) {
+      for (const route of allRoutes) {
+        route.reason = [{
+          file: globalFiles[0],
+          importedBy: 'global',
+          depth: 0,
+        }];
+      }
+      return this.deduplicateRoutes(allRoutes);
+    }
+
+    // Build dependency graph starting from ALL route files, not just changed files
+    // This ensures we can trace dependencies properly
+    const allRouteFiles = allRoutes.map(r => r.path);
+    const graph = this.graphBuilder.buildGraph([...changedFiles, ...allRouteFiles]);
     const affectedFiles = this.graphBuilder.findAffectedFiles(graph);
 
-    const routes: AffectedRoute[] = [];
+    // Filter routes to only those whose files are in the affected set
+    const affectedRoutes = allRoutes.filter(route => 
+      affectedFiles.has(route.path)
+    );
 
-    routes.push(...this.findAppRouterRoutes(affectedFiles, graph));
-    routes.push(...this.findPagesRouterRoutes(affectedFiles, graph));
+    // Add import chain information
+    for (const route of affectedRoutes) {
+      route.reason = this.buildImportChainToChangedFile(graph, route.path, changedFiles);
+    }
 
-    return this.deduplicateRoutes(routes);
+    return this.deduplicateRoutes(affectedRoutes);
   }
 
-  private findAppRouterRoutes(affectedFiles: Set<string>, graph: DependencyGraph): AffectedRoute[] {
-    const routes: AffectedRoute[] = [];
+  private collectAllAppRouterRoutes(): AffectedRoute[] {
     const appDir = join(this.baseDir, 'app');
     const srcAppDir = join(this.baseDir, 'src', 'app');
 
     const baseAppDir = existsSync(appDir) ? appDir : existsSync(srcAppDir) ? srcAppDir : null;
-    if (!baseAppDir) return routes;
+    if (!baseAppDir) return [];
 
-    const globalFiles = new Set<string>();
-    for (const file of affectedFiles) {
-      if (file.includes('middleware.') || file === 'next.config.js' || file === 'next.config.mjs') {
-        globalFiles.add(file);
-      }
-    }
-
-    if (globalFiles.size > 0) {
-      this.collectAllAppRoutes(baseAppDir, '').forEach(route => {
-        routes.push({
-          ...route,
-          reason: this.buildImportChain(graph, [...globalFiles][0], route.path),
-        });
-      });
-      return routes;
-    }
-
-    for (const file of affectedFiles) {
-      const normalizedFile = file.replace(/\\/g, '/');
-      if (!normalizedFile.includes('/app/') && !normalizedFile.startsWith('app/')) continue;
-
-      const routeSegments = this.extractRouteSegments(normalizedFile, baseAppDir);
-      if (!routeSegments) continue;
-
-      const route = this.buildAppRoute(routeSegments, file, graph);
-      if (route) routes.push(route);
-    }
-
-    return routes;
+    return this.collectAllAppRoutes(baseAppDir, '');
   }
 
   private collectAllAppRoutes(baseDir: string, currentPath: string): AffectedRoute[] {
@@ -77,6 +83,8 @@ export class RouteAnalyzer {
     if (!existsSync(fullPath)) return routes;
 
     const entries = readdirSync(fullPath);
+    const routePath = currentPath.replace(/\\/g, '/');
+    const route = this.normalizeAppRoute(routePath);
 
     for (const entry of entries) {
       const entryPath = join(fullPath, entry);
@@ -85,52 +93,40 @@ export class RouteAnalyzer {
       if (stat.isDirectory()) {
         if (entry.startsWith('_') || entry.startsWith('.')) continue;
         routes.push(...this.collectAllAppRoutes(baseDir, join(currentPath, entry)));
-      } else if (entry === 'page.tsx' || entry === 'page.ts' || entry === 'page.jsx' || entry === 'page.js') {
-        const routePath = currentPath.replace(/\\/g, '/');
-        const route = this.normalizeAppRoute(routePath);
-        routes.push({
-          route,
-          path: relative(this.baseDir, entryPath).replace(/\\/g, '/'),
-          type: 'page',
-          reason: [],
-          dynamic: route.includes('['),
-          params: this.extractDynamicParams(route),
-        });
+      } else {
+        let type: AffectedRoute['type'] | null = null;
+        if (entry === 'page.tsx' || entry === 'page.ts' || entry === 'page.jsx' || entry === 'page.js') {
+          type = 'page';
+        } else if (entry === 'layout.tsx' || entry === 'layout.ts' || entry === 'layout.jsx' || entry === 'layout.js') {
+          type = 'layout';
+        } else if (entry === 'template.tsx' || entry === 'template.ts' || entry === 'template.jsx' || entry === 'template.js') {
+          type = 'template';
+        } else if (entry === 'loading.tsx' || entry === 'loading.ts' || entry === 'loading.jsx' || entry === 'loading.js') {
+          type = 'loading';
+        } else if (entry === 'error.tsx' || entry === 'error.ts' || entry === 'error.jsx' || entry === 'error.js') {
+          type = 'error';
+        } else if (entry === 'not-found.tsx' || entry === 'not-found.ts' || entry === 'not-found.jsx' || entry === 'not-found.js') {
+          type = 'error';
+        } else if (entry === 'route.ts' || entry === 'route.js') {
+          type = 'route';
+        }
+
+        if (type) {
+          routes.push({
+            route,
+            path: relative(this.baseDir, entryPath).replace(/\\/g, '/'),
+            type,
+            reason: [],
+            dynamic: route.includes('['),
+            params: this.extractDynamicParams(route),
+          });
+        }
       }
     }
 
     return routes;
   }
 
-  private extractRouteSegments(filePath: string, baseAppDir: string): string | null {
-    const relativePath = relative(baseAppDir, join(this.baseDir, filePath)).replace(/\\/g, '/');
-    if (relativePath.startsWith('..')) return null;
-
-    const segments = relativePath.split('/').slice(0, -1);
-    return segments.join('/');
-  }
-
-  private buildAppRoute(routeSegments: string, filePath: string, graph: DependencyGraph): AffectedRoute | null {
-    const route = this.normalizeAppRoute(routeSegments);
-    const fileName = filePath.split('/').pop() || '';
-
-    let type: AffectedRoute['type'] = 'page';
-    if (fileName.startsWith('layout.')) type = 'layout';
-    else if (fileName.startsWith('template.')) type = 'template';
-    else if (fileName.startsWith('loading.')) type = 'loading';
-    else if (fileName.startsWith('error.')) type = 'error';
-    else if (fileName.startsWith('route.')) type = 'route';
-    else if (!fileName.startsWith('page.')) return null;
-
-    return {
-      route,
-      path: filePath,
-      type,
-      reason: this.buildImportChain(graph, filePath, filePath),
-      dynamic: route.includes('['),
-      params: this.extractDynamicParams(route),
-    };
-  }
 
   private normalizeAppRoute(routePath: string): string {
     const segments = routePath.split('/').filter(Boolean);
@@ -156,34 +152,60 @@ export class RouteAnalyzer {
     return '/' + normalized.join('/');
   }
 
-  private findPagesRouterRoutes(affectedFiles: Set<string>, graph: DependencyGraph): AffectedRoute[] {
-    const routes: AffectedRoute[] = [];
+  private collectAllPagesRouterRoutes(): AffectedRoute[] {
     const pagesDir = join(this.baseDir, 'pages');
     const srcPagesDir = join(this.baseDir, 'src', 'pages');
 
     const basePagesDir = existsSync(pagesDir) ? pagesDir : existsSync(srcPagesDir) ? srcPagesDir : null;
-    if (!basePagesDir) return routes;
+    if (!basePagesDir) return [];
 
-    for (const file of affectedFiles) {
-      const normalizedFile = file.replace(/\\/g, '/');
-      if (!normalizedFile.includes('/pages/') && !normalizedFile.startsWith('pages/')) continue;
+    return this.collectAllPagesRoutes(basePagesDir);
+  }
 
-      const relativePath = relative(basePagesDir, join(this.baseDir, file)).replace(/\\/g, '/');
-      if (relativePath.startsWith('..') || relativePath.startsWith('_') || relativePath.startsWith('api/')) continue;
+  private collectAllPagesRoutes(baseDir: string): AffectedRoute[] {
+    const routes: AffectedRoute[] = [];
+    if (!existsSync(baseDir)) return routes;
 
-      const route = this.buildPagesRoute(relativePath);
-      if (route) {
-        routes.push({
-          route,
-          path: file,
-          type: 'page',
-          reason: this.buildImportChain(graph, file, file),
-          dynamic: route.includes('['),
-          params: this.extractDynamicParams(route),
-        });
+    const scanDirectory = (dir: string) => {
+      const entries = readdirSync(dir);
+      
+      for (const entry of entries) {
+        const fullPath = join(dir, entry);
+        const stat = statSync(fullPath);
+        const relativePath = relative(baseDir, fullPath).replace(/\\/g, '/');
+
+        if (stat.isDirectory()) {
+          if (entry.startsWith('_') || entry === 'api') continue;
+          scanDirectory(fullPath);
+        } else if (entry.match(/\.(tsx?|jsx?)$/)) {
+          if (entry.startsWith('_')) {
+            // Special files like _app, _document
+            routes.push({
+              route: '/',
+              path: relative(this.baseDir, fullPath).replace(/\\/g, '/'),
+              type: 'page',
+              reason: [],
+              dynamic: false,
+            });
+            continue;
+          }
+
+          const route = this.buildPagesRoute(relativePath);
+          if (route) {
+            routes.push({
+              route,
+              path: relative(this.baseDir, fullPath).replace(/\\/g, '/'),
+              type: 'page',
+              reason: [],
+              dynamic: route.includes('['),
+              params: this.extractDynamicParams(route),
+            });
+          }
+        }
       }
-    }
+    };
 
+    scanDirectory(baseDir);
     return routes;
   }
 
@@ -221,49 +243,53 @@ export class RouteAnalyzer {
     return params.length > 0 ? params : undefined;
   }
 
-  private buildImportChain(graph: DependencyGraph, startFile: string, _endFile: string): ImportChain[] {
-    const chain: ImportChain[] = [];
+  private buildImportChainToChangedFile(
+    graph: DependencyGraph,
+    routeFile: string,
+    changedFiles: string[]
+  ): ImportChain[] {
+    const changedSet = new Set(changedFiles);
+    
+    // BFS to find shortest path from route to any changed file
+    const queue: Array<{ file: string; chain: ImportChain[] }> = [{ file: routeFile, chain: [] }];
     const visited = new Set<string>();
-    const queue: Array<{ file: string; depth: number; parent: string | null }> = [
-      { file: startFile, depth: 0, parent: null },
-    ];
 
     while (queue.length > 0) {
-      const { file, depth, parent } = queue.shift()!;
+      const { file, chain } = queue.shift()!;
       if (visited.has(file)) continue;
       visited.add(file);
 
-      if (parent) {
-        chain.push({
-          file,
-          importedBy: parent,
-          depth,
-        });
-      }
-
-      if (graph.changedFiles.has(file) && depth > 0) {
-        break;
+      // Check if this file is a changed file
+      if (changedSet.has(file) && chain.length > 0) {
+        return chain;
       }
 
       const node = graph.nodes.get(file);
-      if (node) {
-        for (const importPath of node.imports) {
-          if (graph.changedFiles.has(importPath)) {
-            chain.push({
+      if (!node) continue;
+
+      // Explore imports (things this file depends on)
+      for (const importPath of node.imports) {
+        if (!visited.has(importPath)) {
+          const newChain = [
+            ...chain,
+            {
               file: importPath,
               importedBy: file,
-              depth: depth + 1,
-            });
-            return chain;
+              depth: chain.length,
+            },
+          ];
+
+          // If we found a changed file, return immediately
+          if (changedSet.has(importPath)) {
+            return newChain;
           }
-          if (!visited.has(importPath)) {
-            queue.push({ file: importPath, depth: depth + 1, parent: file });
-          }
+
+          queue.push({ file: importPath, chain: newChain });
         }
       }
     }
 
-    return chain;
+    return [];
   }
 
   private deduplicateRoutes(routes: AffectedRoute[]): AffectedRoute[] {

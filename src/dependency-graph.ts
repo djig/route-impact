@@ -99,6 +99,13 @@ export class DependencyGraphBuilder {
             const resolved = this.resolveImport(source, fromFile);
             if (resolved) imports.push(resolved);
           }
+        } else if (statement.type === 'ExportNamedDeclaration' || statement.type === 'ExportAllDeclaration') {
+          // Handle export { X } from './module' and export * from './module'
+          const source = (statement as any).source?.value;
+          if (typeof source === 'string') {
+            const resolved = this.resolveImport(source, fromFile);
+            if (resolved) imports.push(resolved);
+          }
         }
       }
 
