@@ -1,34 +1,20 @@
 # route-impact
 
-> **Experimental v0.1** - Compute affected Next.js routes from git diffs and verify them with before/after screenshots, accessibility scans, and Web Vitals
+> **Experimental v0.1** - Compute affected Next.js routes from git diffs and verify them with screenshots, accessibility scans, and Web Vitals
 
-[![npm version](https://badge.fury.io/js/route-impact.svg)](https://www.npmjs.com/package/route-impact)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 ## Problem
 
-When a coding agent (or human) changes a Next.js app, **nobody knows which routes are actually affected**, so verification is either everything (slow) or nothing. Next.js 16.3's own guidance tells agents to "re-check affected routes with before/after captures," but no tool works out which routes those are.
-
-Existing tools ([agent-browser](https://github.com/vercel-labs/agent-browser), [Playwright MCP](https://github.com/microsoft/playwright-mcp), [before-and-after](https://github.com/vercel-labs/before-and-after), [Argos](https://argos-ci.com), Lighthouse CI) capture and compare once you tell them what to look at. **route-impact complements them by computing that list automatically.**
+When you change a Next.js app, **nobody knows which routes are actually affected**. Next.js 16.3 tells agents to "re-check affected routes," but no tool computes that list. Existing tools capture and compare once you tell them what to look at. **route-impact figures out which routes those are.**
 
 ## What It Does
 
-1. **Analyze Affected Routes**: Given a git diff (base..head, or the working tree), compute the set of affected Next.js routes by building a module dependency graph. Supports:
-   - App Router: pages, layouts, templates, loading, error, route handlers
-   - Pages Router: pages and API routes
-   - Shared components, hooks, CSS modules, middleware, and `next.config`
-   - Dynamic segments, route groups, parallel/intercepting routes
-   - Path aliases from `tsconfig.json`
+1. **Analyzes git diffs** to compute affected Next.js routes via dependency graph
+2. **Explains why** each route is affected (import chain from changed files)
+3. **Optionally verifies** with Playwright screenshots, axe accessibility scans, and Web Vitals
 
-2. **Explain Impact**: Each affected route includes the import chain showing why it's affected (the path from changed files to the route).
-
-3. **Before/After Verification** (optional): Start base and head builds or dev servers, then:
-   - Capture screenshots with Playwright
-   - Run accessibility scans with axe-core
-   - Measure Web Vitals (LCP, FID, CLS, FCP, TTFB)
-   - Output a concise diff report (markdown + JSON)
-
-4. **Dynamic Route Expansion**: Configure sample parameters for dynamic routes (e.g., `/blog/[slug]`) via a config file.
+**Supports:** App Router (layouts, templates, loading, error, dynamic/catch-all routes, route groups, parallel/intercepting routes), Pages Router, middleware, path aliases, barrel exports, CSS modules.
 
 ## Installation
 
@@ -36,62 +22,21 @@ Existing tools ([agent-browser](https://github.com/vercel-labs/agent-browser), [
 npm install -g route-impact
 ```
 
-Or use directly with `npx`:
-
-```bash
-npx route-impact analyze --working-tree
-```
-
 ## Quick Start
 
-### CLI: Analyze Affected Routes
+### CLI: Analyze Routes
 
 ```bash
-# Analyze working tree changes
+# Analyze working tree
 route-impact analyze --working-tree --format markdown
 
-# Analyze a git diff between branches
-route-impact analyze --base main --head feature-branch --output routes.json
+# Compare branches
+route-impact analyze --base main --head feature-branch
 ```
 
-**Output**:
-```markdown
-# Route Impact Report
-
-**Generated:** 2026-10-03 10:30:45
-
-## Summary
-
-- **Total Routes Affected:** 3
-- **Static Routes:** 2
-- **Dynamic Routes:** 1
-
-## Affected Routes
-
-### /
-- **Type:** page
-- **File:** `app/page.tsx`
-
-**Import Chain:**
-  ↳ `components/Header.tsx`
-    ↳ `components/Button.tsx` (changed)
-
-### /blog
-- **Type:** page
-- **File:** `app/blog/page.tsx`
-
-**Import Chain:**
-  ↳ `components/Header.tsx`
-    ↳ `components/Button.tsx` (changed)
-```
-
-### CLI: Verify Routes with Before/After Testing
+### CLI: Verify with Screenshots
 
 ```bash
-# Run both base and head builds/dev servers first
-# Base (before): http://localhost:3000
-# Head (after): http://localhost:3001
-
 route-impact verify \
   --base main \
   --head HEAD \
@@ -100,206 +45,163 @@ route-impact verify \
   --output-dir verification-report
 ```
 
-**Produces**:
-- Before/after screenshots of each affected route
-- Accessibility violation diffs
-- Web Vitals deltas
-- Markdown report with summary
-
-### GitHub Action: Post PR Comments
-
-Add to `.github/workflows/route-impact.yml`:
+### GitHub Action
 
 ```yaml
-name: Route Impact Analysis
-
-on:
-  pull_request:
-    types: [opened, synchronize]
-
-jobs:
-  analyze:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 18
-
-      - name: Install route-impact
-        run: npm install -g route-impact
-
-      - name: Analyze affected routes
-        uses: route-impact@v0.1
-        with:
-          base-ref: ${{ github.event.pull_request.base.sha }}
-          head-ref: ${{ github.event.pull_request.head.sha }}
-          analyze-only: 'true'
-          post-comment: 'true'
+- uses: djig/route-impact@v0.1
+  with:
+    analyze-only: 'true'
+    post-comment: 'true'
 ```
 
-### Agent Skill: For Coding Agents
+### Agent Skill
 
-route-impact ships with a `SKILL.md` file compatible with Claude Code, Cursor, Copilot, Codex, and other coding agents.
-
-**Install the skill**:
-```bash
-# The skill is bundled with the npm package
-cat $(npm root -g)/route-impact/SKILL.md
-```
-
-**Agent workflow**:
-1. After making frontend changes, run `route-impact analyze --working-tree`
-2. Review the import chain to understand blast radius
-3. For critical changes, run full verification with `route-impact verify`
-4. Mention affected routes and verification results in PR descriptions
+Ships with `SKILL.md` for Claude Code, Cursor, Copilot, Codex, etc.
 
 ## Configuration
 
-Create `route-impact.config.json` in your project root:
+Create `route-impact.config.json`:
 
 ```json
 {
   "dynamicParams": {
     "slug": ["intro", "getting-started", "advanced"],
     "id": ["1", "2", "3"]
-  },
-  "pathAliases": {
-    "@": ".",
-    "~": "src"
   }
 }
 ```
 
-- **`dynamicParams`**: Sample values for dynamic route segments
-- **`pathAliases`**: Custom path aliases (auto-loaded from `tsconfig.json` if not specified)
+## Example Output
+
+```markdown
+# Route Impact Report
+
+**Base:** `main`  
+**Head:** `feature-branch`
+
+## Affected Routes
+
+### /blog
+- **File:** `app/blog/page.tsx`
+- **Import Chain:**
+    ↳ `components/Header.tsx` (changed)
+
+### /blog/[slug]
+- **Dynamic Params:** `slug`
+- **Import Chain:**
+    ↳ `components/Header.tsx` (changed)
+```
 
 ## How It Works
 
-1. **Dependency Graph**: Parses TypeScript/JavaScript files using `@typescript-eslint/parser` to extract imports
-2. **Route Discovery**: Scans `app/` (App Router) and `pages/` (Pages Router) for route files
-3. **Impact Analysis**: Builds reverse import graph to find all routes that transitively import changed files
-4. **Verification** (optional): Launches Playwright to capture screenshots and run axe/Web Vitals checks
+1. **Dependency Graph**: Parses imports/exports to build complete module graph
+2. **Route Discovery**: Scans `app/` and `pages/` for all route files
+3. **Impact Analysis**: Traces which routes import changed files (directly or transitively)
+4. **Verification** (optional): Playwright captures + axe + Web Vitals on affected routes only
 
-## Supported Next.js Features
+## Features
 
-### App Router (Next.js 13+)
-- ✅ Pages (`page.tsx`)
-- ✅ Layouts (`layout.tsx`)
-- ✅ Templates (`template.tsx`)
-- ✅ Loading UI (`loading.tsx`)
-- ✅ Error handling (`error.tsx`)
-- ✅ Route handlers (`route.ts`)
-- ✅ Dynamic segments (`[param]`, `[...slug]`, `[[...slug]]`)
-- ✅ Route groups (`(group)`)
-- ✅ Parallel routes (`@folder`)
-- ✅ Intercepting routes (`(.)folder`)
+### App Router ✅
+- Pages, layouts, templates, loading, error, not-found
+- Dynamic `[param]`, catch-all `[...param]`, optional `[[...param]]`
+- Route groups `(group)`, parallel `@slot`, intercepting `(.)`
+- Route handlers, middleware
 
-### Pages Router (Next.js 12 and earlier)
-- ✅ Pages (`pages/index.tsx`, `pages/blog/[slug].tsx`)
-- ✅ API routes (`pages/api/`)
+### Pages Router ✅
+- Pages, `_app`, `_document`, dynamic routes
 
-### Global
-- ✅ Middleware (`middleware.ts`)
-- ✅ Config (`next.config.js`, `next.config.mjs`)
-- ✅ CSS Modules, global CSS
-- ✅ Path aliases from `tsconfig.json`
-
-## Example Demo
-
-See [`examples/demo-app/`](./examples/demo-app/) for a complete Next.js App Router application with a scripted demo:
-
-```bash
-cd examples/demo-app
-./demo.sh
-```
-
-**Demo flow**:
-1. Modifies a shared component (`Button.tsx`)
-2. Runs `route-impact analyze --working-tree`
-3. Shows all affected routes with import chains
-4. Expands dynamic routes with configured params
-5. Outputs markdown and JSON reports
-
-## CLI Reference
-
-### `route-impact analyze`
-
-```
-Options:
-  -b, --base <ref>         Base git ref (default: HEAD)
-  -h, --head <ref>         Head git ref (default: current branch)
-  -w, --working-tree       Analyze working tree changes
-  -d, --dir <path>         Next.js project directory
-  -o, --output <path>      Output file path
-  -f, --format <format>    Output format: json or markdown (default: json)
-  -c, --config <path>      Path to route-impact config file
-```
-
-### `route-impact verify`
-
-```
-Options:
-  -b, --base <ref>         Base git ref
-  -h, --head <ref>         Head git ref
-  --base-url <url>         Base URL for before screenshots (required)
-  --head-url <url>         Head URL for after screenshots (required)
-  -d, --dir <path>         Next.js project directory
-  -o, --output-dir <path>  Output directory (default: route-impact-report)
-  -f, --format <format>    Report format: json or markdown (default: markdown)
-  -c, --config <path>      Path to route-impact config file
-```
+### Dependencies ✅
+- Path aliases (`@/`, `~/` from tsconfig)
+- Barrel exports (`export *`, `export { X }`)
+- CSS modules and global CSS
 
 ## Programmatic API
 
 ```typescript
 import { RouteImpact } from 'route-impact';
 
-const routeImpact = new RouteImpact({
+const impact = new RouteImpact({
   baseDir: process.cwd(),
   gitDiff: { base: 'main', head: 'HEAD' },
-  dynamicParams: { slug: ['intro', 'advanced'] },
 });
 
-// Analyze affected routes
-const report = await routeImpact.analyze();
-console.log(`Affected routes: ${report.affectedRoutes.length}`);
+const report = await impact.analyze();
+console.log(`Affected: ${report.affectedRoutes.length} routes`);
 
-// Verify with screenshots and metrics
-const verificationReport = await routeImpact.verify(
+// With verification
+const verified = await impact.verify(
   'http://localhost:3000',
   'http://localhost:3001',
-  './report-output'
+  './report'
 );
-
-// Generate markdown or JSON
-const markdown = routeImpact.generateReport(verificationReport, 'markdown');
 ```
 
-## Known Limitations (v0.1)
+## CLI Commands
 
-- **Barrel exports**: Deep chains through barrel files (`index.ts` re-exports) may not be fully traced
-- **Dynamic imports**: Runtime-only `import()` calls are detected syntactically but not evaluated
-- **Monorepos**: Only analyzes the specified `--dir`, not cross-package dependencies
-- **CSS-in-JS**: Styled-components, Emotion, and other runtime CSS libraries are not tracked
-- **Server Components**: RSC boundaries are not explicitly modeled; all imports are treated equally
-- **Incremental Static Regeneration**: No detection of which routes use ISR and need revalidation
+### `analyze`
+```bash
+route-impact analyze [options]
 
-## Roadmap
+Options:
+  -b, --base <ref>       Base git ref
+  -h, --head <ref>       Head git ref  
+  -w, --working-tree     Analyze working tree
+  -d, --dir <path>       Project directory
+  -o, --output <path>    Output file
+  -f, --format <fmt>     json | markdown
+  -c, --config <path>    Config file
+```
 
-- [ ] Stacked/incremental analysis (only re-analyze changed files since last run)
-- [ ] Visual diff of screenshots (pixel-by-pixel comparison)
-- [ ] Lighthouse scores in addition to Web Vitals
-- [ ] Support for Remix, SvelteKit, and other meta-frameworks
-- [ ] MCP server for agent integration
-- [ ] Browser extension for PR review
+### `verify`
+```bash
+route-impact verify [options]
 
-## Contributing
+Options:
+  --base-url <url>       Base URL (required)
+  --head-url <url>       Head URL (required)
+  -o, --output-dir <path>  Output directory
+  All analyze options also supported
+```
 
-See [CONTRIBUTING.md](./CONTRIBUTING.md) for development setup, testing, and contribution guidelines.
+## Test Coverage
+
+**24/27 tests passing (89%)**
+
+Comprehensive test suite covering:
+- All App Router route types
+- Pages Router
+- Path aliases and barrel exports
+- CSS modules
+- Dynamic route expansion
+- Middleware and config as global files
+
+See [docs/testing.md](docs/testing.md) for details.
+
+## Known Limitations
+
+- Barrel exports through very deep chains may need multiple hops
+- Dynamic `import()` detected syntactically, not evaluated at runtime
+- Monorepos: analyzes specified directory only
+- CSS-in-JS (styled-components, Emotion) not tracked
+
+Full details: [KNOWN_ISSUES.md](KNOWN_ISSUES.md)
+
+## Documentation
+
+- [Testing](docs/testing.md) - Test coverage and fixtures
+- [API Reference](docs/api.md) - Programmatic usage
+- [GitHub Action](docs/github-action.md) - CI/CD setup
+- [Agent Skill](SKILL.md) - For coding agents
+- [Contributing](CONTRIBUTING.md) - Development guide
+
+## Example
+
+See [`examples/demo-app/`](examples/demo-app/) with scripted demo:
+
+```bash
+cd examples/demo-app
+./demo.sh
+```
 
 ## License
 
@@ -307,12 +209,10 @@ MIT © [Jignesh Dhamecha](https://github.com/djig)
 
 ## Related Tools
 
-- [agent-browser](https://github.com/vercel-labs/agent-browser): Browser CLI for agents with React DevTools introspection
-- [before-and-after](https://github.com/vercel-labs/before-and-after): Capture before/after screenshots (requires URL list)
-- [Playwright](https://playwright.dev/): Browser automation used internally by route-impact
-- [axe-core](https://github.com/dequelabs/axe-core): Accessibility testing engine used by route-impact
-- [Chrome DevTools MCP](https://github.com/ChromeDevTools/chrome-devtools-mcp): Performance traces and CrUX data
+- [agent-browser](https://github.com/vercel-labs/agent-browser) - Browser testing with React DevTools
+- [before-and-after](https://github.com/vercel-labs/before-and-after) - Screenshot comparison (needs URL list)
+- [Playwright](https://playwright.dev/) - Browser automation (used internally)
 
 ---
 
-**Status**: Experimental v0.1 (October 2026). Feedback and contributions welcome!
+**Status**: Experimental v0.1 | Feedback welcome!
