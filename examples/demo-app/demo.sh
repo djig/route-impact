@@ -29,19 +29,31 @@ echo "Step 1: Showing current routes"
 echo "--------------------------------"
 echo ""
 
-# Create a temporary change to the Button component
-echo "Making a change to components/Button.tsx..."
-sed -i.bak 's/bg-blue-500/bg-blue-600/g' components/Button.tsx
-echo "✓ Changed button color from blue-500 to blue-600"
+# Create a feature branch
+git checkout -b feature/update-pages
+
+# Create changes to multiple pages
+echo "Making changes to pages..."
+echo "// Updated on $(date)" >> app/page.tsx
+echo "// Updated on $(date)" >> app/blog/page.tsx
+echo "// Updated on $(date)" >> app/blog/[slug]/page.tsx
+echo "✓ Updated home page, blog index, and blog post pages"
+echo ""
+
+# Commit the changes
+git add app/
+git commit -m "Update pages with timestamp comments"
+echo "✓ Committed changes"
 echo ""
 
 echo "Step 2: Running route-impact analysis"
 echo "---------------------------------------"
 echo ""
 
-# Run route-impact on working tree changes
+# Run route-impact comparing master to feature branch
 node ../../dist/cli.js analyze \
-  --working-tree \
+  --base master \
+  --head feature/update-pages \
   --format markdown \
   --output route-impact-report.md
 
@@ -60,7 +72,8 @@ echo "----------------------------------"
 echo ""
 
 node ../../dist/cli.js analyze \
-  --working-tree \
+  --base master \
+  --head feature/update-pages \
   --format json \
   --output route-impact-report.json \
   --config route-impact.config.json
@@ -72,9 +85,10 @@ echo "Affected routes (JSON):"
 cat route-impact-report.json | node -e "const data = JSON.parse(require('fs').readFileSync(0, 'utf-8')); console.log(JSON.stringify(data.affectedRoutes.map(r => r.route), null, 2));"
 echo ""
 
-# Restore the original file
-mv components/Button.tsx.bak components/Button.tsx
-echo "✓ Restored original Button.tsx"
+# Clean up
+git checkout master
+git branch -D feature/update-pages
+echo "✓ Cleaned up feature branch"
 echo ""
 
 echo "============================================"
@@ -82,7 +96,7 @@ echo "Demo Complete!"
 echo "============================================"
 echo ""
 echo "Summary:"
-echo "- Modified shared component (Button.tsx)"
+echo "- Modified multiple page files"
 echo "- route-impact detected all affected routes"
 echo "- Reports saved to route-impact-report.md and .json"
 echo ""
