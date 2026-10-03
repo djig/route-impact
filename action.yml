@@ -1,0 +1,147 @@
+name: 'Route Impact Analysis'
+description: 'Analyze affected Next.js routes and post before/after verification results to PR'
+author: 'Jignesh Dhamecha'
+
+branding:
+  icon: 'activity'
+  color: 'blue'
+
+inputs:
+  base-ref:
+    description: 'Base git reference (default: base branch of PR)'
+    required: false
+    default: ''
+  head-ref:
+    description: 'Head git reference (default: head branch of PR)'
+    required: false
+    default: ''
+  analyze-only:
+    description: 'Only analyze affected routes without verification'
+    required: false
+    default: 'false'
+  base-url:
+    description: 'Base URL for before screenshots (required if analyze-only is false)'
+    required: false
+    default: ''
+  head-url:
+    description: 'Head URL for after screenshots (required if analyze-only is false)'
+    required: false
+    default: ''
+  working-directory:
+    description: 'Next.js project directory'
+    required: false
+    default: '.'
+  config-path:
+    description: 'Path to route-impact config file'
+    required: false
+    default: ''
+  post-comment:
+    description: 'Post results as PR comment'
+    required: false
+    default: 'true'
+  github-token:
+    description: 'GitHub token for posting comments'
+    required: false
+    default: ${{ github.token }}
+
+outputs:
+  affected-routes:
+    description: 'JSON array of affected routes'
+  report-path:
+    description: 'Path to the generated report'
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Install dependencies
+      shell: bash
+      run: |
+        npm install -g route-impact@latest || npm install -g .
+
+    - name: Analyze routes
+      id: analyze
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: |
+        BASE_REF="${{ inputs.base-ref }}"
+        HEAD_REF="${{ inputs.head-ref }}"
+        
+        if [ -z "$BASE_REF" ]; then
+          BASE_REF="${{ github.event.pull_request.base.sha }}"
+        fi
+        
+        if [ -z "$HEAD_REF" ]; then
+          HEAD_REF="${{ github.event.pull_request.head.sha }}"
+        fi
+
+        CONFIG_ARG=""
+        if [ -n "${{ inputs.config-path }}" ]; then
+          CONFIG_ARG="--config ${{ inputs.config-path }}"
+        fi
+
+        if [ "${{ inputs.analyze-only }}" = "true" ]; then
+          route-impact analyze \
+            --base "$BASE_REF" \
+            --head "$HEAD_REF" \
+            --output route-impact.json \
+            --format json \
+            $CONFIG_ARG
+          
+          cat route-impact.json | jq -r '.affectedRoutes' > affected-routes.json
+          echo "report-path=route-impact.json" >> $GITHUB_OUTPUT
+        else
+          if [ -z "${{ inputs.base-url }}" ] || [ -z "${{ inputs.head-url }}" ]; then
+            echo "Error: base-url and head-url are required when analyze-only is false"
+            exit 1
+          fi
+
+          route-impact verify \
+            --base "$BASE_REF" \
+            --head "$HEAD_REF" \
+            --base-url "${{ inputs.base-url }}" \
+            --head-url "${{ inputs.head-url }}" \
+            --output-dir route-impact-report \
+            --format markdown \
+            $CONFIG_ARG
+          
+          cat route-impact-report/report.md > report.md
+          echo "report-path=route-impact-report/report.md" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Post PR comment
+      if: inputs.post-comment == 'true' && github.event_name == 'pull_request'
+      uses: actions/github-script@v7
+      with:
+        github-token: ${{ inputs.github-token }}
+        script: |
+          const fs = require('fs');
+          const reportPath = '${{ steps.analyze.outputs.report-path }}';
+          
+          if (!fs.existsSync(reportPath)) {
+            console.log('No report found');
+            return;
+          }
+
+          let body;
+          if (reportPath.endsWith('.json')) {
+            const report = JSON.parse(fs.readFileSync(reportPath, 'utf8'));
+            body = `## 🎯 Route Impact Analysis\n\n`;
+            body += `**Affected Routes:** ${report.summary.totalRoutes}\n\n`;
+            
+            if (report.affectedRoutes.length > 0) {
+              body += '### Routes\n\n';
+              for (const route of report.affectedRoutes) {
+                const icon = route.dynamic ? '🔗' : '📄';
+                body += `- ${icon} \`${route.route}\` (${route.type})\n`;
+              }
+            }
+          } else {
+            body = fs.readFileSync(reportPath, 'utf8');
+          }
+
+          await github.rest.issues.createComment({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            issue_number: context.issue.number,
+            body: body
+          });
