@@ -96,8 +96,10 @@ export class RouteVerifier {
 
   private async runAxe(page: Page): Promise<AxeViolation[]> {
     try {
+      // Read axe-core from node_modules (ESM-compatible)
+      const axePath = join(process.cwd(), 'node_modules', 'axe-core', 'axe.min.js');
       await page.addScriptTag({
-        content: readFileSync(require.resolve('axe-core/axe.min.js'), 'utf-8'),
+        content: readFileSync(axePath, 'utf-8'),
       });
 
       const axeResults = (await page.evaluate(() => {
