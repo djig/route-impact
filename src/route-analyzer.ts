@@ -50,12 +50,13 @@ export class RouteAnalyzer {
     // Build dependency graph starting from ALL route files, not just changed files
     // This ensures we can trace dependencies properly
     const allRouteFiles = allRoutes.map(r => r.path);
+    const changedFilesSet = new Set(changedFiles);
     const graph = this.graphBuilder.buildGraph([...changedFiles, ...allRouteFiles]);
     const affectedFiles = this.graphBuilder.findAffectedFiles(graph);
 
-    // Filter routes to only those whose files are in the affected set
+    // Filter routes to only those whose files are in the affected set OR are directly changed
     const affectedRoutes = allRoutes.filter(route => 
-      affectedFiles.has(route.path)
+      affectedFiles.has(route.path) || changedFilesSet.has(route.path)
     );
 
     // Add import chain information
