@@ -1,0 +1,44 @@
+{
+  "timestamp": "2026-10-03T18:06:17.922Z",
+  "gitDiff": {
+    "base": "master",
+    "head": "feature/update-pages"
+  },
+  "affectedRoutes": [
+    {
+      "route": "/blog",
+      "path": "app/blog/page.tsx",
+      "type": "page",
+      "reason": [
+        {
+          "file": "components/Header.tsx",
+          "importedBy": "app/blog/page.tsx",
+          "depth": 1
+        }
+      ],
+      "dynamic": false
+    },
+    {
+      "route": "/blog/[slug]",
+      "path": "app/blog/[slug]/page.tsx",
+      "type": "page",
+      "reason": [
+        {
+          "file": "components/Header.tsx",
+          "importedBy": "app/blog/[slug]/page.tsx",
+          "depth": 1
+        }
+      ],
+      "dynamic": true,
+      "params": [
+        "slug"
+      ]
+    }
+  ],
+  "summary": {
+    "totalRoutes": 2,
+    "dynamicRoutes": 1,
+    "staticRoutes": 1,
+    "verified": 0
+  }
+}

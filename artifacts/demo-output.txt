@@ -1,0 +1,146 @@
+============================================
+Route Impact Demo
+============================================
+
+hint: Using 'master' as the name for the initial branch. This default branch name
+hint: is subject to change. To configure the initial branch name to use in all
+hint: of your new repositories, which will suppress this warning, call:
+hint: 
+hint: 	git config --global init.defaultBranch <name>
+hint: 
+hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+hint: 'development'. The just-created branch can be renamed via this command:
+hint: 
+hint: 	git branch -m <name>
+Initialized empty Git repository in /workspace/examples/demo-app/.git/
+[master (root-commit) 1914991] Initial commit
+ 28 files changed, 7329 insertions(+)
+ create mode 100644 .gitignore
+ create mode 100644 AGENTS.md
+ create mode 100644 CLAUDE.md
+ create mode 100644 README.md
+ create mode 100644 app/about/page.tsx
+ create mode 100644 app/blog/[slug]/page.tsx
+ create mode 100644 app/blog/page.tsx
+ create mode 100644 app/favicon.ico
+ create mode 100644 app/globals.css
+ create mode 100644 app/layout.tsx
+ create mode 100644 app/page.tsx
+ create mode 100644 components/Button.tsx
+ create mode 100644 components/Header.tsx
+ create mode 100755 demo.sh
+ create mode 100644 eslint.config.mjs
+ create mode 100644 next.config.ts
+ create mode 100644 package-lock.json
+ create mode 100644 package.json
+ create mode 100644 postcss.config.mjs
+ create mode 100644 public/file.svg
+ create mode 100644 public/globe.svg
+ create mode 100644 public/next.svg
+ create mode 100644 public/vercel.svg
+ create mode 100644 public/window.svg
+ create mode 100644 route-impact-report.json
+ create mode 100644 route-impact-report.md
+ create mode 100644 route-impact.config.json
+ create mode 100644 tsconfig.json
+✓ Git repository initialized
+
+Step 1: Showing current routes
+--------------------------------
+
+Switched to a new branch 'feature/update-pages'
+Making changes to pages...
+✓ Updated home page, blog index, and blog post pages
+
+[feature/update-pages bde752e] Update pages with timestamp comments
+ 3 files changed, 3 insertions(+)
+✓ Committed changes
+
+Step 2: Running route-impact analysis
+---------------------------------------
+
+Analyzing affected routes...
+
+✓ Found 2 affected route(s)
+
+Affected Routes:
+  📄 /blog (page)
+     ← changed: components/Header.tsx
+  🔗 /blog/[slug] (page)
+     ← changed: components/Header.tsx
+
+✓ Report written to /workspace/examples/demo-app/route-impact-report.md
+
+✓ Analysis complete!
+
+Step 3: Viewing the report
+---------------------------
+
+# Route Impact Report
+
+**Generated:** 10/3/2026, 6:06:17 PM
+
+**Base:** `master`
+**Head:** `feature/update-pages`
+
+## Summary
+
+- **Total Routes Affected:** 2
+- **Static Routes:** 1
+- **Dynamic Routes:** 1
+## Affected Routes
+
+### /blog
+- **Type:** page
+- **File:** `app/blog/page.tsx`
+
+**Import Chain:**
+
+    ↳ `components/Header.tsx`
+
+### /blog/[slug]
+- **Type:** page
+- **File:** `app/blog/[slug]/page.tsx`
+- **Dynamic Params:** `slug`
+
+**Import Chain:**
+
+    ↳ `components/Header.tsx`
+
+Step 4: Expanding dynamic routes
+----------------------------------
+
+Analyzing affected routes...
+
+✓ Found 2 affected route(s)
+
+Affected Routes:
+  📄 /blog (page)
+     ← changed: components/Header.tsx
+  🔗 /blog/[slug] (page)
+     ← changed: components/Header.tsx
+
+✓ Report written to /workspace/examples/demo-app/route-impact-report.json
+✓ Analysis with dynamic route expansion complete!
+
+Affected routes (JSON):
+[
+  "/blog",
+  "/blog/[slug]"
+]
+
+Switched to branch 'master'
+M	route-impact-report.json
+M	route-impact-report.md
+Deleted branch feature/update-pages (was bde752e).
+✓ Cleaned up feature branch
+
+============================================
+Demo Complete!
+============================================
+
+Summary:
+- Modified multiple page files
+- route-impact detected all affected routes
+- Reports saved to route-impact-report.md and .json
+
