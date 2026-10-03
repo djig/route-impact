@@ -62,6 +62,7 @@ export class RouteImpact {
       headUrl,
       routes: routePaths,
       outputDir,
+      webVitalsThresholds: this.config.webVitalsThresholds,
     });
 
     report.verifications = verifications;

@@ -2,7 +2,7 @@ import { chromium, Browser, Page } from 'playwright';
 import type { AxeResults } from 'axe-core';
 import { readFileSync } from 'fs';
 import { join } from 'path';
-import type { VerificationResult, ScreenshotResult, AxeViolation, WebVitalsMetrics } from './types.js';
+import type { VerificationResult, ScreenshotResult, AxeViolation, WebVitalsMetrics, WebVitalsThresholds } from './types.js';
 
 export interface VerifyOptions {
   baseUrl: string;
@@ -10,7 +10,20 @@ export interface VerifyOptions {
   routes: string[];
   outputDir: string;
   timeout?: number;
+  webVitalsThresholds?: WebVitalsThresholds;
 }
+
+const DEFAULT_THRESHOLDS: Required<WebVitalsThresholds> = {
+  absoluteMs: 10,
+  relativePercent: 10,
+  cls: 0.05,
+  perMetric: {
+    LCP: 50,
+    FID: 10,
+    FCP: 10,
+    TTFB: 10,
+  },
+};
 
 export class RouteVerifier {
   private browser: Browser | null = null;
@@ -36,21 +49,38 @@ export class RouteVerifier {
     const baseUrl = `${options.baseUrl}${route}`;
     const headUrl = `${options.headUrl}${route}`;
 
-    const before = await this.captureScreenshot(baseUrl, route, 'before', options.outputDir, options.timeout);
-    const after = await this.captureScreenshot(headUrl, route, 'after', options.outputDir, options.timeout);
+    // Create a unique, stable filename based on route
+    const routeId = this.generateRouteId(route);
+    
+    const before = await this.captureScreenshot(baseUrl, routeId, 'before', options.outputDir, options.timeout);
+    const after = await this.captureScreenshot(headUrl, routeId, 'after', options.outputDir, options.timeout);
 
     return {
       route,
       url: headUrl,
       before,
       after,
-      diff: this.computeDiff(before, after),
+      diff: this.computeDiff(before, after, options.webVitalsThresholds),
     };
+  }
+
+  private generateRouteId(route: string): string {
+    // Generate a unique, stable identifier for screenshot filenames
+    // Use a combination of sanitized route and a stable hash
+    const sanitized = route
+      .replace(/^\//, '') // Remove leading slash
+      .replace(/\//g, '_') // Replace slashes with underscores
+      .replace(/[^a-zA-Z0-9_-]/g, '-') // Replace special chars with dashes
+      .replace(/-+/g, '-') // Collapse multiple dashes
+      .replace(/^-|-$/g, ''); // Remove leading/trailing dashes
+    
+    // For root route, use 'index'
+    return sanitized || 'index';
   }
 
   private async captureScreenshot(
     url: string,
-    route: string,
+    routeId: string,
     variant: 'before' | 'after',
     outputDir: string,
     timeout = 30000
@@ -78,8 +108,7 @@ export class RouteVerifier {
 
       await page.waitForTimeout(1000);
 
-      const sanitizedRoute = route.replace(/\//g, '_').replace(/[^a-zA-Z0-9_-]/g, '') || 'root';
-      const screenshotPath = join(outputDir, `${sanitizedRoute}-${variant}.png`);
+      const screenshotPath = join(outputDir, `${routeId}-${variant}.png`);
       await page.screenshot({ path: screenshotPath, fullPage: true });
       result.screenshotPath = screenshotPath;
 
@@ -194,7 +223,7 @@ export class RouteVerifier {
     }
   }
 
-  private computeDiff(before: ScreenshotResult, after: ScreenshotResult) {
+  private computeDiff(before: ScreenshotResult, after: ScreenshotResult, thresholds?: WebVitalsThresholds) {
     const beforeIds = new Set(before.axeViolations.map(v => v.id));
     const afterIds = new Set(after.axeViolations.map(v => v.id));
 
@@ -204,6 +233,16 @@ export class RouteVerifier {
     const vitalsDeltas: Partial<Record<keyof WebVitalsMetrics, number>> = {};
     let webVitalsRegression = false;
 
+    // Merge provided thresholds with defaults
+    const config: Required<WebVitalsThresholds> = {
+      ...DEFAULT_THRESHOLDS,
+      ...thresholds,
+      perMetric: {
+        ...DEFAULT_THRESHOLDS.perMetric,
+        ...(thresholds?.perMetric || {}),
+      },
+    };
+
     for (const key of ['LCP', 'FID', 'CLS', 'FCP', 'TTFB'] as Array<keyof WebVitalsMetrics>) {
       const beforeValue = before.webVitals[key];
       const afterValue = after.webVitals[key];
@@ -212,8 +251,30 @@ export class RouteVerifier {
         const delta = afterValue - beforeValue;
         vitalsDeltas[key] = delta;
 
-        if (delta > beforeValue * 0.1) {
-          webVitalsRegression = true;
+        // Only flag as regression if delta exceeds thresholds
+        if (delta > 0) {
+          let exceedsThreshold = false;
+
+          if (key === 'CLS') {
+            // CLS is unitless, use CLS-specific threshold
+            exceedsThreshold = delta > config.cls;
+          } else {
+            // Check per-metric threshold first
+            const perMetricThreshold = config.perMetric[key as keyof typeof config.perMetric];
+            if (perMetricThreshold !== undefined && delta > perMetricThreshold) {
+              exceedsThreshold = true;
+            } else {
+              // Check absolute and relative thresholds
+              const absoluteThreshold = config.absoluteMs;
+              const relativeThreshold = beforeValue * (config.relativePercent / 100);
+              
+              exceedsThreshold = delta > absoluteThreshold && delta > relativeThreshold;
+            }
+          }
+
+          if (exceedsThreshold) {
+            webVitalsRegression = true;
+          }
         }
       }
     }

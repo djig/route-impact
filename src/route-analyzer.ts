@@ -297,12 +297,35 @@ export class RouteAnalyzer {
     const seen = new Map<string, AffectedRoute>();
 
     for (const route of routes) {
-      // Use path as key to avoid colliding routes (e.g. app/error.tsx and app/not-found.tsx both have route='/' and type='error')
-      const key = route.path;
+      // Use route (URL) as key to dedupe - same URL should only appear once
+      const key = route.route;
       const existing = seen.get(key);
 
-      if (!existing || route.reason.length < existing.reason.length) {
+      if (!existing) {
         seen.set(key, route);
+      } else {
+        // Merge types and reasons from the same route
+        // Append type if different (e.g., "page, layout")
+        if (!existing.type.includes(route.type)) {
+          existing.type = `${existing.type}, ${route.type}` as AffectedRoute['type'];
+        }
+        
+        // Merge reasons to keep all import chains
+        const mergedReasons = [...existing.reason];
+        for (const newReason of route.reason) {
+          const isDuplicate = mergedReasons.some(
+            r => r.file === newReason.file && r.importedBy === newReason.importedBy
+          );
+          if (!isDuplicate) {
+            mergedReasons.push(newReason);
+          }
+        }
+        existing.reason = mergedReasons;
+        
+        // Update path to include both files
+        if (existing.path !== route.path) {
+          existing.path = `${existing.path}, ${route.path}`;
+        }
       }
     }
 

@@ -22,7 +22,7 @@ describe('RouteAnalyzer - Complete Feature Coverage', () => {
       
       // Root layout should affect all app routes
       expect(routePaths).toContain('/');
-      expect(routes.find(r => r.route === '/' && r.type === 'layout')).toBeDefined();
+      expect(routes.find(r => r.route === '/' && r.type.includes('layout'))).toBeDefined();
     });
   });
 
@@ -31,7 +31,7 @@ describe('RouteAnalyzer - Complete Feature Coverage', () => {
       const analyzer = new RouteAnalyzer(fixtureDir);
       const routes = analyzer.analyzeAffectedRoutes(['app/blog/[slug]/layout.tsx']);
       
-      const affected = routes.find(r => r.route === '/blog/[slug]' && r.type === 'layout');
+      const affected = routes.find(r => r.route === '/blog/[slug]' && r.type.includes('layout'));
       expect(affected).toBeDefined();
     });
   });
@@ -41,7 +41,7 @@ describe('RouteAnalyzer - Complete Feature Coverage', () => {
       const analyzer = new RouteAnalyzer(fixtureDir);
       const routes = analyzer.analyzeAffectedRoutes(['app/template.tsx']);
       
-      const template = routes.find(r => r.type === 'template');
+      const template = routes.find(r => r.type.includes('template'));
       expect(template).toBeDefined();
       expect(template?.route).toBe('/');
     });
@@ -52,7 +52,7 @@ describe('RouteAnalyzer - Complete Feature Coverage', () => {
       const analyzer = new RouteAnalyzer(fixtureDir);
       const routes = analyzer.analyzeAffectedRoutes(['app/loading.tsx']);
       
-      const loading = routes.find(r => r.type === 'loading');
+      const loading = routes.find(r => r.type.includes('loading'));
       expect(loading).toBeDefined();
       expect(loading?.route).toBe('/');
     });
@@ -63,7 +63,7 @@ describe('RouteAnalyzer - Complete Feature Coverage', () => {
       const analyzer = new RouteAnalyzer(fixtureDir);
       const routes = analyzer.analyzeAffectedRoutes(['app/error.tsx']);
       
-      const error = routes.find(r => r.type === 'error');
+      const error = routes.find(r => r.type.includes('error'));
       expect(error).toBeDefined();
       expect(error?.route).toBe('/');
     });
@@ -205,7 +205,7 @@ describe('RouteAnalyzer - Complete Feature Coverage', () => {
       const routes = analyzer.analyzeAffectedRoutes(['lib/shared.ts']);
       
       // Should find routes that import from lib/index which re-exports shared
-      const homePage = routes.find(r => r.route === '/' && r.type === 'page');
+      const homePage = routes.find(r => r.route === '/' && r.type.includes('page'));
       expect(homePage).toBeDefined();
     });
 
@@ -237,7 +237,7 @@ describe('RouteAnalyzer - Complete Feature Coverage', () => {
       const routes = analyzer.analyzeAffectedRoutes(['styles/button.module.css']);
       
       // blog/[slug]/layout.tsx imports this CSS module
-      const affected = routes.find(r => r.route === '/blog/[slug]' && r.type === 'layout');
+      const affected = routes.find(r => r.route === '/blog/[slug]' && r.type.includes('layout'));
       expect(affected).toBeDefined();
     });
   });
@@ -248,12 +248,12 @@ describe('RouteAnalyzer - Complete Feature Coverage', () => {
       const routes = analyzer.analyzeAffectedRoutes(['styles/globals.css']);
       
       // Root layout imports globals.css
-      const rootLayout = routes.find(r => r.type === 'layout' && r.route === '/');
+      const rootLayout = routes.find(r => r.type.includes('layout') && r.route === '/');
       expect(rootLayout).toBeDefined();
       
-      // Should also affect pages/_app.tsx
-      const pagesApp = routes.find(r => r.path.includes('_app.tsx'));
-      expect(pagesApp).toBeDefined();
+      // Should also affect pages/_app.tsx (now merged into root route)
+      const rootRoute = routes.find(r => r.route === '/' && r.path.includes('_app.tsx'));
+      expect(rootRoute).toBeDefined();
     });
   });
 

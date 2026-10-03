@@ -39,6 +39,7 @@ program
         workingTree: options.workingTree,
         dynamicParams: config.dynamicParams,
         pathAliases: config.pathAliases,
+        webVitalsThresholds: config.webVitalsThresholds,
       });
 
       console.log(pc.blue('Analyzing affected routes...\n'));
@@ -101,6 +102,7 @@ program
         },
         dynamicParams: config.dynamicParams,
         pathAliases: config.pathAliases,
+        webVitalsThresholds: config.webVitalsThresholds,
       });
 
       console.log(pc.blue('Analyzing affected routes...\n'));

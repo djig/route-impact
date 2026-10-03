@@ -27,7 +27,16 @@ export class Reporter {
       for (const route of report.affectedRoutes) {
         lines.push(`### ${route.route}`);
         lines.push(`- **Type:** ${route.type}`);
-        lines.push(`- **File:** \`${route.path}\``);
+        // Handle potentially comma-separated paths
+        const paths = route.path.split(', ');
+        if (paths.length === 1) {
+          lines.push(`- **File:** \`${route.path}\``);
+        } else {
+          lines.push(`- **Files:**`);
+          for (const path of paths) {
+            lines.push(`  - \`${path}\``);
+          }
+        }
         if (route.dynamic && route.params) {
           lines.push(`- **Dynamic Params:** ${route.params.map(p => `\`${p}\``).join(', ')}`);
         }

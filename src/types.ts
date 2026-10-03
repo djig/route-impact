@@ -8,6 +8,23 @@ export interface RouteImpactConfig {
   nextjsVersion?: 'app' | 'pages' | 'both';
   dynamicParams?: Record<string, string[]>;
   pathAliases?: Record<string, string>;
+  webVitalsThresholds?: WebVitalsThresholds;
+}
+
+export interface WebVitalsThresholds {
+  /** Absolute threshold in milliseconds (default: 10ms) */
+  absoluteMs?: number;
+  /** Relative threshold as a percentage (default: 10%) */
+  relativePercent?: number;
+  /** Per-metric absolute thresholds in milliseconds */
+  perMetric?: {
+    LCP?: number;
+    FID?: number;
+    FCP?: number;
+    TTFB?: number;
+  };
+  /** CLS threshold (unitless, default: 0.05) */
+  cls?: number;
 }
 
 export interface AffectedRoute {

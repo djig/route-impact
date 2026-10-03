@@ -1,5 +1,11 @@
 import { Header } from '../../../components/Header';
 
+export async function generateStaticParams() {
+  // Return empty array to allow dynamic rendering
+  // In a real app, you might pre-generate some slugs
+  return [];
+}
+
 export default async function BlogPostPage({
   params,
 }: {

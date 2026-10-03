@@ -67,9 +67,35 @@ Create `route-impact.config.json`:
   "dynamicParams": {
     "slug": ["intro", "getting-started", "advanced"],
     "id": ["1", "2", "3"]
+  },
+  "webVitalsThresholds": {
+    "absoluteMs": 10,
+    "relativePercent": 10,
+    "cls": 0.05,
+    "perMetric": {
+      "LCP": 50,
+      "FID": 10,
+      "FCP": 10,
+      "TTFB": 10
+    }
   }
 }
 ```
+
+### Web Vitals Thresholds
+
+Configure noise thresholds to avoid flagging insignificant performance changes:
+
+- **`absoluteMs`** (default: 10): Minimum absolute difference in milliseconds to flag as regression
+- **`relativePercent`** (default: 10): Minimum relative difference as percentage to flag as regression
+- **`cls`** (default: 0.05): Threshold for Cumulative Layout Shift (unitless)
+- **`perMetric`**: Per-metric absolute thresholds that override the global `absoluteMs` setting
+  - **`LCP`** (default: 50ms): Largest Contentful Paint threshold
+  - **`FID`** (default: 10ms): First Input Delay threshold
+  - **`FCP`** (default: 10ms): First Contentful Paint threshold
+  - **`TTFB`** (default: 10ms): Time to First Byte threshold
+
+A regression is only flagged if the delta exceeds **both** the absolute AND relative thresholds (or the per-metric threshold).
 
 ## Example Output
 
