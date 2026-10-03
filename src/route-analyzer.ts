@@ -297,7 +297,8 @@ export class RouteAnalyzer {
     const seen = new Map<string, AffectedRoute>();
 
     for (const route of routes) {
-      const key = `${route.route}:${route.type}`;
+      // Use path as key to avoid colliding routes (e.g. app/error.tsx and app/not-found.tsx both have route='/' and type='error')
+      const key = route.path;
       const existing = seen.get(key);
 
       if (!existing || route.reason.length < existing.reason.length) {
