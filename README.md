@@ -2,6 +2,7 @@
 
 > **Experimental v0.1** - Compute affected Next.js routes from git diffs and verify them with screenshots, accessibility scans, and Web Vitals
 
+[![CI](https://github.com/djig/route-impact/actions/workflows/ci.yml/badge.svg)](https://github.com/djig/route-impact/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 ## Problem
@@ -18,9 +19,23 @@ When you change a Next.js app, **nobody knows which routes are actually affected
 
 ## Installation
 
+### From Source (Current Method)
+
+```bash
+git clone https://github.com/djig/route-impact.git
+cd route-impact
+npm install
+npm run build
+npm link
+```
+
+### npm Registry (Coming Soon)
+
 ```bash
 npm install -g route-impact
 ```
+
+The package is not yet published to npm. Use the source installation method above.
 
 ## Quick Start
 
@@ -48,11 +63,13 @@ route-impact verify \
 ### GitHub Action
 
 ```yaml
-- uses: djig/route-impact@v0.1
+- uses: djig/route-impact@main
   with:
     analyze-only: 'true'
     post-comment: 'true'
 ```
+
+**Note:** Replace `@main` with a specific commit SHA for production use to pin the version. Tags and releases are coming soon.
 
 ### Agent Skill
 
@@ -242,3 +259,7 @@ MIT © [Jignesh Dhamecha](https://github.com/djig)
 ---
 
 **Status**: Experimental v0.1 | Feedback welcome!
+
+---
+
+More Claude Code tools by [@djig](https://github.com/djig): [ui-loop](https://github.com/djig/ui-loop) (token-budgeted visual feedback MCP) · [drift-guard](https://github.com/djig/drift-guard) (blocks stale React/Next/Tailwind patterns) · [claude-onair](https://github.com/djig/claude-onair) (desk status light mod)

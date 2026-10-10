@@ -10,7 +10,11 @@
     "agent",
     "playwright",
     "accessibility",
-    "web-vitals"
+    "web-vitals",
+    "claude-code",
+    "agent-skills",
+    "github-actions",
+    "nextjs-app-router"
   ],
   "author": "Jignesh Dhamecha",
   "license": "MIT",
@@ -46,7 +50,8 @@
     "lint": "eslint src",
     "typecheck": "tsc --noEmit",
     "ci": "npm run lint && npm run typecheck && npm run test && npm run build",
-    "demo": "cd examples/demo-app && npm run demo"
+    "demo": "cd examples/demo-app && npm run demo",
+    "prepare": "npm run build"
   },
   "dependencies": {
     "@typescript-eslint/parser": "^8.15.0",
