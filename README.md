@@ -19,7 +19,13 @@ When you change a Next.js app, **nobody knows which routes are actually affected
 
 ## Installation
 
-### From Source (Current Method)
+### From GitHub
+
+```bash
+npm install -g github:djig/route-impact
+```
+
+### From Source
 
 ```bash
 git clone https://github.com/djig/route-impact.git
@@ -35,7 +41,7 @@ npm link
 npm install -g route-impact
 ```
 
-The package is not yet published to npm. Use the source installation method above.
+The package is not yet published to npm. Use the GitHub or source installation methods above.
 
 ## Quick Start
 
